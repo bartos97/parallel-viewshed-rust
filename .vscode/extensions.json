@@ -1,5 +1,6 @@
 {
     "recommendations": [
-        "Swellaby.rust-pack"
+        "swellaby.rust-pack",
+        "jinxdash.prettier-rust"
     ]
 }
