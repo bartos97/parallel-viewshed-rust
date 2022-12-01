@@ -2,7 +2,7 @@ use tobj;
 use std::fs::File;
 use std::io::{ BufWriter, Write };
 
-const MODEL_FILE: &str = "resources/teapot.obj";
+const MODEL_FILE: &str = "resources/blob.obj";
 
 fn main() {
     println!("Start reading file..");
@@ -18,31 +18,35 @@ fn main() {
 
     let mut min_x = mesh.positions[0];
     let mut max_x = mesh.positions[0];
+    let mut min_z = mesh.positions[1];
+    let mut max_z = mesh.positions[1];
     for pos in (0..mesh.positions.len()).step_by(3) {
         let x = mesh.positions[pos];
-        // let y = mesh.positions[pos + 1];
-        // let z = mesh.positions[pos + 2];
         if x > max_x {
             max_x = x;
         }
         if x < min_x {
             min_x = x;
         }
+        let z = mesh.positions[pos + 2];
+        if z > max_z {
+            max_z = z;
+        }
+        if z < min_z {
+            min_z = z;
+        }
     }
-    let half_x = min_x + (max_x - min_x) / 2.0;
+    let chunk_max_x = min_x + (max_x - min_x) / 10.0;
+    let chunk_max_z = min_z + (max_z - min_z) / 10.0;
 
-    //print vertices from half of model in X axis
-    // for pos in (0..mesh.positions.len()).step_by(3) {
-    //     let x = mesh.positions[pos];
-    //     let y = mesh.positions[pos + 1];
-    //     let z = mesh.positions[pos + 2];
-    //     if x < half_x {
-    //         println!("x = {}, y = {}, z = {}", x, y, z);
-    //     }
-    // }
-
-    let f = File::create("out_faces.txt").expect("unable to create file");
+    let f = File::create("out_obj.obj").expect("unable to create file");
     let mut f = BufWriter::new(f);
+
+    for i in (0..mesh.positions.len()).step_by(3) {
+        write!(f, "v {:.6} {:.6} {:.6}\n", mesh.positions[i], mesh.positions[i + 1], mesh.positions[i + 2]).expect(
+            "unable to write"
+        );
+    }
 
     // for each triangle
     for i in (0..mesh.indices.len()).step_by(3) {
@@ -53,15 +57,13 @@ fn main() {
             mesh.indices[i + 2] as usize,
         ];
         for index in triangle_indices {
-            // vertex = [x, y, z]
-            let vertex = [mesh.positions[index * 3], mesh.positions[index * 3 + 1], mesh.positions[index * 3 + 2]];
-            if vertex[0] > half_x {
+            if mesh.positions[index * 3] > chunk_max_x || mesh.positions[index * 3 + 2] > chunk_max_z {
                 should_run = false;
             }
         }
 
         if should_run {
-            write!(f, "f {} {} {}\n", triangle_indices[0], triangle_indices[1], triangle_indices[2]).expect(
+            write!(f, "f {} {} {}\n", triangle_indices[0] + 1, triangle_indices[1] + 1, triangle_indices[2] + 1).expect(
                 "unable to write"
             );
         }
