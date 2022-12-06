@@ -1,4 +1,4 @@
-use chrono;
+mod logger;
 use tobj;
 use std::fs::File;
 use std::io::{ BufWriter, Write };
@@ -6,7 +6,7 @@ use std::io::{ BufWriter, Write };
 const MODEL_FILE: &str = "resources/blob.obj";
 
 fn main() {
-    init_logger();
+    logger::init();
     println!("Start reading file..");
     let obj_file = tobj::load_obj(MODEL_FILE, &tobj::GPU_LOAD_OPTIONS);
     assert!(obj_file.is_ok());
