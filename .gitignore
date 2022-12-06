@@ -1,5 +1,7 @@
 /target
 out_*
 *.ignore*
-*.blend
+*.blend*
 *.mtl
+logs/
+*.log
