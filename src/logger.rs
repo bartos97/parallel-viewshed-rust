@@ -23,7 +23,7 @@ pub fn init() {
 
         CombinedLogger::init(
             vec![
-                TermLogger::new(LevelFilter::Trace, Config::default(), TerminalMode::Mixed, ColorChoice::Auto),
+                TermLogger::new(LevelFilter::Info, Config::default(), TerminalMode::Mixed, ColorChoice::Auto),
                 WriteLogger::new(LevelFilter::Trace, log_file_config, log_file)
             ]
         ).unwrap();
