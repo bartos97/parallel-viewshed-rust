@@ -1,5 +1,6 @@
 /target
 out_*
+out/
 *.ignore*
 *.blend*
 *.mtl

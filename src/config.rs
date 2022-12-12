@@ -1,12 +1,12 @@
 pub struct AppConfig {
     pub file_path: String,
-    pub chunks_per_axis: u32,
-    pub threads_amount: u32,
+    pub chunks_per_axis: usize,
+    pub threads_amount: usize,
 }
 
 static DEFAULT_FILE_PATH: &str = "input.obj";
-static DEFAULT_CHUNKS_PER_AXIS: u32 = 10;
-static DEFAULT_THREADS_AMOUNT: u32 = 6;
+static DEFAULT_CHUNKS_PER_AXIS: usize = 10;
+static DEFAULT_THREADS_AMOUNT: usize = 6;
 
 impl AppConfig {
     pub fn build(args: &[String]) -> AppConfig {
@@ -34,7 +34,7 @@ impl AppConfig {
             },
 
             chunks_per_axis: if args.len() > 2 {
-                match args[2].parse::<u32>() {
+                match args[2].parse::<usize>() {
                     Ok(x) => x,
                     Err(_) => {
                         log::warn!(
@@ -50,7 +50,7 @@ impl AppConfig {
             },
 
             threads_amount: if args.len() > 3 {
-                match args[3].parse::<u32>() {
+                match args[3].parse::<usize>() {
                     Ok(x) => x,
                     Err(_) => {
                         log::warn!(
