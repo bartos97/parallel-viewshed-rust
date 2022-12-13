@@ -39,7 +39,7 @@ impl MeshSplitter {
     }
 
     pub fn new(file_path: &str, chunks_per_axis: usize) -> Self {
-        log::info!("Start reading input file {}", file_path);
+        log::info!("Reading input file {}...", file_path);
 
         let models = Self::read_models_from_input_file(file_path);
         log::info!("Reading input file finished");
@@ -55,13 +55,13 @@ impl MeshSplitter {
             mesh_boundary.x.0 + (mesh_boundary.x.1 - mesh_boundary.x.0) / 2.0,
             mesh_boundary.z.0 + (mesh_boundary.z.1 - mesh_boundary.z.0) / 2.0,
         );
-        log::trace!("\nMesh origin = {:?}\n{:?}", mesh_origin, mesh_boundary);
+        log::debug!("Mesh origin = {:?}; {:?}", mesh_origin, mesh_boundary);
 
         let chunk_size = (
             (mesh_boundary.x.1 - mesh_boundary.x.0) / (chunks_per_axis as f32),
             (mesh_boundary.z.1 - mesh_boundary.z.0) / (chunks_per_axis as f32),
         );
-        log::trace!("Chunk size = {:?}", chunk_size);
+        log::debug!("Chunk size = {:?}", chunk_size);
 
         Self {
             models,
@@ -107,7 +107,7 @@ impl MeshSplitter {
     }
 
     pub fn run_splitter(&mut self, threads_amount: usize) {
-        log::info!("Splitting mesh into {} chunks", self.chunks_per_axis * self.chunks_per_axis);
+        log::info!("Splitting mesh into {} chunks...", self.chunks_per_axis * self.chunks_per_axis);
         let avg_chunk_vertices_capacity =
             (self.get_mesh().positions.len() as f32) / ((self.chunks_per_axis * self.chunks_per_axis) as f32);
         let avg_chunk_vertices_capacity = avg_chunk_vertices_capacity as usize;
@@ -115,6 +115,7 @@ impl MeshSplitter {
         for chunk_i_x in 0..self.chunks_per_axis {
             for chunk_i_z in 0..self.chunks_per_axis {
                 let mut new_chunk = self.create_chunk((chunk_i_x, chunk_i_z), avg_chunk_vertices_capacity);
+
                 for vertex in self.get_mesh().positions.chunks_exact(3) {
                     if Self::is_vertex_in_chunk(vertex, &new_chunk) {
                         new_chunk.vertices.push(vertex[0]);
@@ -122,9 +123,11 @@ impl MeshSplitter {
                         new_chunk.vertices.push(vertex[2]);
                     }
                 }
+
                 self.chunks.push(new_chunk);
             }
         }
+        log::info!("Splitting mesh finished");
     }
 
     fn create_chunk(&self, chunk_index: (usize, usize), vertices_capacity: usize) -> MeshChunk {

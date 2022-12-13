@@ -73,7 +73,7 @@ impl AppConfig {
             chunks_per_axis,
             threads_amount
         };
-        log::trace!("{:#?}", config);
+        log::debug!("{:#?}", config);
         config
     }
 }
