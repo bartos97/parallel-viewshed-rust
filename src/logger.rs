@@ -42,8 +42,8 @@ pub fn init() {
 
 #[macro_export]
 macro_rules! panic_log {
-    ($msg:tt) => {
-        log::error!($msg);
-        panic!($msg);
+    ($($arg:tt)+) => {
+        log::error!($($arg)+);
+        panic!($($arg)+);
     };
 }
