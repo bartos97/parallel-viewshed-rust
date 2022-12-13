@@ -7,7 +7,6 @@ use crate::panic_log;
 pub struct MeshSplitter {
     models: Vec<tobj::Model>,
     mesh_boundary: MeshBoundary,
-    mesh_origin: (f32, f32),
     chunk_size: (f32, f32),
     chunks_per_axis: usize,
     chunks: Vec<MeshChunk>,
@@ -51,22 +50,22 @@ impl MeshSplitter {
             log::warn!("Found {} models in file, using only first", models.len());
         }
 
-        let mesh_boundary = Self::calc_mesh_boundry(&models[0].mesh);
+        let mesh_boundary = Self::calc_mesh_boundary(&models[0].mesh);
         let mesh_origin = (
             mesh_boundary.x.0 + (mesh_boundary.x.1 - mesh_boundary.x.0) / 2.0,
             mesh_boundary.z.0 + (mesh_boundary.z.1 - mesh_boundary.z.0) / 2.0,
         );
+        log::trace!("\nMesh origin = {:?}\n{:?}", mesh_origin, mesh_boundary);
+
         let chunk_size = (
             (mesh_boundary.x.1 - mesh_boundary.x.0) / (chunks_per_axis as f32),
             (mesh_boundary.z.1 - mesh_boundary.z.0) / (chunks_per_axis as f32),
         );
-        log::trace!("\nMesh origin = {:?}\n{:?}", mesh_origin, mesh_boundary);
         log::trace!("Chunk size = {:?}", chunk_size);
 
         Self {
             models,
             mesh_boundary,
-            mesh_origin,
             chunk_size,
             chunks_per_axis,
             chunks: Vec::with_capacity(chunks_per_axis * chunks_per_axis),
@@ -85,7 +84,7 @@ impl MeshSplitter {
         models
     }
 
-    fn calc_mesh_boundry(mesh: &tobj::Mesh) -> MeshBoundary {
+    fn calc_mesh_boundary(mesh: &tobj::Mesh) -> MeshBoundary {
         let mut min_x = mesh.positions[0];
         let mut max_x = mesh.positions[0];
         let mut min_z = mesh.positions[2];
@@ -109,10 +108,13 @@ impl MeshSplitter {
 
     pub fn run_splitter(&mut self, threads_amount: usize) {
         log::info!("Splitting mesh into {} chunks", self.chunks_per_axis * self.chunks_per_axis);
+        let avg_chunk_vertices_capacity =
+            (self.get_mesh().positions.len() as f32) / ((self.chunks_per_axis * self.chunks_per_axis) as f32);
+        let avg_chunk_vertices_capacity = avg_chunk_vertices_capacity as usize;
 
         for chunk_i_x in 0..self.chunks_per_axis {
             for chunk_i_z in 0..self.chunks_per_axis {
-                let mut new_chunk = self.create_chunk((chunk_i_x, chunk_i_z));
+                let mut new_chunk = self.create_chunk((chunk_i_x, chunk_i_z), avg_chunk_vertices_capacity);
                 for vertex in self.get_mesh().positions.chunks_exact(3) {
                     if Self::is_vertex_in_chunk(vertex, &new_chunk) {
                         new_chunk.vertices.push(vertex[0]);
@@ -125,11 +127,7 @@ impl MeshSplitter {
         }
     }
 
-    fn create_chunk(&self, chunk_index: (usize, usize)) -> MeshChunk {
-        let aprox_vertices_len =
-            ((self.get_mesh().positions.len() as f32) / ((self.chunks_per_axis * self.chunks_per_axis) as f32)) * 1.25;
-        let aprox_vertices_len = aprox_vertices_len as usize;
-
+    fn create_chunk(&self, chunk_index: (usize, usize), vertices_capacity: usize) -> MeshChunk {
         let min_x = self.mesh_boundary.x.0 + (chunk_index.0 as f32) * self.chunk_size.0;
         let max_x = min_x + self.chunk_size.0;
         let min_z = self.mesh_boundary.z.0 + (chunk_index.1 as f32) * self.chunk_size.1;
@@ -142,7 +140,7 @@ impl MeshSplitter {
                 z: (min_z, max_z - std::f32::EPSILON),
                 // epsilon to avoid chunks overlaping when using >= and <= operators
             },
-            vertices: Vec::with_capacity(aprox_vertices_len),
+            vertices: Vec::with_capacity(vertices_capacity),
         }
     }
 
