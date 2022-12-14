@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::error::Error;
 use std::io::Write;
 use tobj;
@@ -20,6 +21,7 @@ struct MeshBoundary {
 
 struct MeshChunk {
     vertices: Vec<f32>,
+    indices: Vec<u32>,
     index_in_mesh: (usize, usize),
     boundary: MeshBoundary,
 }
@@ -107,20 +109,53 @@ impl MeshSplitter {
     }
 
     pub fn run_splitter(&mut self, threads_amount: usize) {
-        log::info!("Splitting mesh into {} chunks...", self.chunks_per_axis * self.chunks_per_axis);
+        log::info!(
+            "Splitting mesh into {} chunks using {} threads...",
+            self.chunks_per_axis * self.chunks_per_axis,
+            threads_amount
+        );
+
         let avg_chunk_vertices_capacity =
             (self.get_mesh().positions.len() as f32) / ((self.chunks_per_axis * self.chunks_per_axis) as f32);
         let avg_chunk_vertices_capacity = avg_chunk_vertices_capacity as usize;
+        let avg_chunk_indices_capacity =
+            (self.get_mesh().indices.len() as f32) / ((self.chunks_per_axis * self.chunks_per_axis) as f32);
+        let avg_chunk_indices_capacity = avg_chunk_indices_capacity as usize;
 
         for chunk_i_x in 0..self.chunks_per_axis {
             for chunk_i_z in 0..self.chunks_per_axis {
-                let mut new_chunk = self.create_chunk((chunk_i_x, chunk_i_z), avg_chunk_vertices_capacity);
+                let mut new_chunk = self.create_chunk(
+                    (chunk_i_x, chunk_i_z),
+                    avg_chunk_vertices_capacity,
+                    avg_chunk_indices_capacity
+                );
+                // key is the index in original mesh and value is index in new mesh
+                let mut vertex_map: HashMap<u32, u32> = HashMap::with_capacity(avg_chunk_indices_capacity);
+                let mut vertex_counter: u32 = 1;
+                let mesh = self.get_mesh();
 
-                for vertex in self.get_mesh().positions.chunks_exact(3) {
-                    if Self::is_vertex_in_chunk(vertex, &new_chunk) {
-                        new_chunk.vertices.push(vertex[0]);
-                        new_chunk.vertices.push(vertex[1]);
-                        new_chunk.vertices.push(vertex[2]);
+                for triangle_indices in mesh.indices.chunks_exact(3) {
+                    let mut triangle_vertices: [(f32, f32, f32); 3] = Default::default();
+                    for i in 0..triangle_indices.len() {
+                        let pos = (triangle_indices[i] as usize) * 3;
+                        triangle_vertices[i] = (mesh.positions[pos], mesh.positions[pos + 1], mesh.positions[pos + 2]);
+                    }
+
+                    if
+                        Self::is_vertex_in_chunk(&triangle_vertices[0], &new_chunk) ||
+                        Self::is_vertex_in_chunk(&triangle_vertices[1], &new_chunk) ||
+                        Self::is_vertex_in_chunk(&triangle_vertices[2], &new_chunk)
+                    {
+                        for (vertex, index) in std::iter::zip(triangle_vertices, triangle_indices) {
+                            if !vertex_map.contains_key(index) {
+                                vertex_map.insert(*index, vertex_counter);
+                                vertex_counter += 1;
+                                new_chunk.vertices.push(vertex.0);
+                                new_chunk.vertices.push(vertex.1);
+                                new_chunk.vertices.push(vertex.2);
+                            }
+                            new_chunk.indices.push(*vertex_map.get(index).unwrap());
+                        }
                     }
                 }
 
@@ -130,7 +165,12 @@ impl MeshSplitter {
         log::info!("Splitting mesh finished");
     }
 
-    fn create_chunk(&self, chunk_index: (usize, usize), vertices_capacity: usize) -> MeshChunk {
+    fn create_chunk(
+        &self,
+        chunk_index: (usize, usize),
+        vertices_capacity: usize,
+        indices_capacity: usize
+    ) -> MeshChunk {
         let min_x = self.mesh_boundary.x.0 + (chunk_index.0 as f32) * self.chunk_size.0;
         let max_x = min_x + self.chunk_size.0;
         let min_z = self.mesh_boundary.z.0 + (chunk_index.1 as f32) * self.chunk_size.1;
@@ -139,19 +179,19 @@ impl MeshSplitter {
         MeshChunk {
             index_in_mesh: chunk_index,
             boundary: MeshBoundary {
-                x: (min_x, max_x - std::f32::EPSILON),
-                z: (min_z, max_z - std::f32::EPSILON),
-                // epsilon to avoid chunks overlaping when using >= and <= operators
+                x: (min_x, max_x),
+                z: (min_z, max_z),
             },
             vertices: Vec::with_capacity(vertices_capacity),
+            indices: Vec::with_capacity(indices_capacity),
         }
     }
 
-    fn is_vertex_in_chunk(vertex: &[f32], chunk: &MeshChunk) -> bool {
-        vertex[0] >= chunk.boundary.x.0 &&
-            vertex[0] <= chunk.boundary.x.1 &&
-            vertex[2] >= chunk.boundary.z.0 &&
-            vertex[2] <= chunk.boundary.z.1
+    fn is_vertex_in_chunk(vertex: &(f32, f32, f32), chunk: &MeshChunk) -> bool {
+        vertex.0 >= chunk.boundary.x.0 &&
+            vertex.0 <= chunk.boundary.x.1 &&
+            vertex.2 >= chunk.boundary.z.0 &&
+            vertex.2 <= chunk.boundary.z.1
     }
 
     pub fn save_all_chunks_to_file(&self) -> Result<(), Box<dyn Error>> {
@@ -180,24 +220,12 @@ impl MeshSplitter {
         )?;
         let mut f = std::io::BufWriter::new(f);
 
-        // write all vertex data from original mesh
-        for vertex in self.get_mesh().positions.chunks(3) {
+        for vertex in chunk.vertices.chunks_exact(3) {
             write!(f, "v {:.6} {:.6} {:.6}\n", vertex[0], vertex[1], vertex[2])?;
         }
 
-        // write triangle faces data
-        for triangle_indices in self.get_mesh().indices.chunks(3) {
-            let mesh = self.get_mesh();
-            let mut should_run = false;
-            for index in triangle_indices {
-                let i = (*index as usize) * 3;
-                let vertex = [mesh.positions[i], mesh.positions[i + 1], mesh.positions[i + 2]];
-                should_run = Self::is_vertex_in_chunk(&vertex, chunk);
-            }
-            if should_run {
-                write!(f, "f {} {} {}\n", triangle_indices[0] + 1, triangle_indices[1] + 1, triangle_indices[2] + 1)?;
-                // + 1 because of indexing in OBJ files
-            }
+        for triangle_indices in chunk.indices.chunks_exact(3) {
+            write!(f, "f {} {} {}\n", triangle_indices[0], triangle_indices[1], triangle_indices[2])?;
         }
 
         log::info!("Chunk({}, {}) saved to file", chunk.index_in_mesh.0, chunk.index_in_mesh.1);
