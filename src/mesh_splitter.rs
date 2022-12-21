@@ -81,6 +81,7 @@ impl MeshChunk {
     }
 }
 
+#[allow(unused)]
 pub struct MeshSplitter {
     models: Vec<tobj::Model>,
     mesh_boundary: MeshBoundary,
